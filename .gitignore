@@ -4,3 +4,8 @@ node_modules/
 .env
 .env.local
 .claude/settings*.json
+evals/.env
+evals/.venv/
+evals/results/*/raw.jsonl
+evals/results/*/judged.jsonl
+evals/results/*/spot_check.jsonl
