@@ -1,0 +1,13 @@
+{
+  "name": "claude-ffmpeg",
+  "version": "0.1.0",
+  "description": "Helps Claude Code generate accurate, efficient FFmpeg commands from natural-language descriptions.",
+  "author": {
+    "name": "Yuval Yakubov",
+    "email": "yuval@rendi.dev"
+  },
+  "homepage": "https://github.com/rendi-api/claude-ffmpeg",
+  "repository": "https://github.com/rendi-api/claude-ffmpeg",
+  "license": "MIT",
+  "keywords": ["ffmpeg", "video", "audio", "transcoding", "media"]
+}
