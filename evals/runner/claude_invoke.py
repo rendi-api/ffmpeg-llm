@@ -24,11 +24,13 @@ class InvokeResult:
     returncode: int
 
 
-def build_argv(model: str, plugin_dir: Path | None, prompt: str) -> list[str]:
+def build_argv(model: str, plugin_dir: Path | None) -> list[str]:
+    """Build the claude argv. The prompt is passed via stdin in `invoke()`,
+    NOT as a positional argument — Windows CreateProcess truncates argv values
+    at embedded newlines, mangling multi-line prompts."""
     argv = ["claude", "-p", "--model", model]
     if plugin_dir is not None:
         argv += ["--plugin-dir", str(plugin_dir)]
-    argv.append(prompt)
     return argv
 
 
@@ -39,17 +41,17 @@ def invoke(
     prompt: str,
     timeout_s: int = 300,
 ) -> InvokeResult:
-    """Spawn `claude -p`. Auth via Max OAuth (no API key needed).
+    """Spawn `claude -p`, passing the prompt via stdin. Auth via Max OAuth.
 
     On timeout or non-zero exit we return an InvokeResult with whatever stdout
     we got plus an explanatory stderr. The caller (runner.run) keeps going so
     one slow or failing prompt doesn't kill the whole batch.
     """
-    argv = build_argv(model=model, plugin_dir=plugin_dir, prompt=prompt)
+    argv = build_argv(model=model, plugin_dir=plugin_dir)
     argv[0] = _CLAUDE  # resolve `claude` -> full path (handles Windows .CMD)
     try:
         result = subprocess.run(
-            argv, capture_output=True, text=True, timeout=timeout_s,
+            argv, input=prompt, capture_output=True, text=True, timeout=timeout_s,
             encoding="utf-8", errors="replace",
         )
     except subprocess.TimeoutExpired as e:

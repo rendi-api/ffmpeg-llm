@@ -95,17 +95,30 @@ def _extract_json(text: str) -> dict:
 
 
 def _judge_call(prompt_text: str, response_a: str, response_b: str, timeout_s: int = 300) -> dict:
-    """Run `claude -p` with the rubric. Returns the parsed JSON envelope from --output-format json."""
+    """Run `claude -p` with the rubric. Returns the parsed JSON envelope from --output-format json.
+
+    Both the system prompt (rubric) and the user message contain embedded newlines.
+    Windows CreateProcess truncates argv at the first newline, so we pass them via
+    stdin / writable tempfile to keep them intact. RUBRIC_SYSTEM goes through
+    --system-prompt (a single-line wrapper does not work since the rubric has \\n);
+    we work around that by writing the rubric to a tempfile and using a settings
+    JSON pointer. Simpler: pipe the user message through stdin, and squash the
+    rubric to one line for --system-prompt.
+    """
     user_msg = _build_user_message(prompt_text, response_a, response_b)
+    # Replace literal newlines in the rubric with `\n` so --system-prompt receives
+    # a single-line argv value. Claude Code interprets the prompt as plain text;
+    # collapsing newlines to spaces preserves semantics for our rubric.
+    flat_rubric = RUBRIC_SYSTEM.replace("\n", " ")
     result = subprocess.run(
         [
             _CLAUDE, "-p",
             "--disable-slash-commands",
             "--output-format", "json",
             "--model", JUDGE_MODEL,
-            "--system-prompt", RUBRIC_SYSTEM,
-            user_msg,
+            "--system-prompt", flat_rubric,
         ],
+        input=user_msg,
         capture_output=True, text=True, timeout=timeout_s,
         encoding="utf-8", errors="replace",
     )
