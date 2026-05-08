@@ -10,10 +10,16 @@ projectPaths and don't activate from this worktree.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Iterator
+
+# Resolve `claude` to its full path once. On Windows, npm shims are .CMD files,
+# and Python's subprocess (without shell=True) calls CreateProcess directly,
+# which doesn't honor PATHEXT. Hardcoding the resolved path side-steps that.
+_CLAUDE = shutil.which("claude") or "claude"
 
 
 @dataclass(frozen=True)
@@ -25,7 +31,7 @@ class PluginSnapshot:
 def list_plugins() -> list[dict]:
     """Return raw `claude plugin list --json` output as a list of dicts."""
     result = subprocess.run(
-        ["claude", "plugin", "list", "--json"],
+        [_CLAUDE, "plugin", "list", "--json"],
         capture_output=True, text=True, check=True, timeout=30,
     )
     return json.loads(result.stdout)
@@ -48,7 +54,7 @@ def snapshot_enabled_user_plugins(plugins: list[dict] | None = None) -> list[Plu
 
 def disable_all_user_plugins() -> None:
     subprocess.run(
-        ["claude", "plugin", "disable", "-a", "-s", "user"],
+        [_CLAUDE, "plugin", "disable", "-a", "-s", "user"],
         capture_output=True, text=True, check=True, timeout=30,
     )
 
@@ -58,7 +64,7 @@ def restore_plugins(snapshot: list[PluginSnapshot]) -> list[str]:
     failed: list[str] = []
     for p in snapshot:
         result = subprocess.run(
-            ["claude", "plugin", "enable", p.id, "-s", p.scope],
+            [_CLAUDE, "plugin", "enable", p.id, "-s", p.scope],
             capture_output=True, text=True, check=False, timeout=30,
         )
         if result.returncode != 0:

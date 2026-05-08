@@ -7,9 +7,14 @@ See evals/README.md "Verified headless invocation".
 """
 from __future__ import annotations
 
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+# Resolve `claude` once. Windows npm shims are .CMD; Python subprocess without
+# shell=True calls CreateProcess directly which doesn't honor PATHEXT.
+_CLAUDE = shutil.which("claude") or "claude"
 
 
 @dataclass
@@ -36,6 +41,7 @@ def invoke(
 ) -> InvokeResult:
     """Spawn `claude -p`. Auth via Max OAuth (no API key needed)."""
     argv = build_argv(model=model, plugin_dir=plugin_dir, prompt=prompt)
+    argv[0] = _CLAUDE  # resolve `claude` -> full path (handles Windows .CMD)
     result = subprocess.run(
         argv, capture_output=True, text=True, timeout=timeout_s
     )

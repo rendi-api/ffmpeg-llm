@@ -13,6 +13,7 @@ import argparse
 import json
 import random
 import re
+import shutil
 import subprocess
 import sys
 from collections import defaultdict
@@ -25,6 +26,10 @@ from runner.budget import PRICING, Budget, BudgetExceeded
 from runner.plugin_isolation import isolated_user_plugins
 
 JUDGE_MODEL = "claude-opus-4-7"
+
+# Resolve `claude` once. Windows npm shims are .CMD; Python subprocess without
+# shell=True calls CreateProcess directly which doesn't honor PATHEXT.
+_CLAUDE = shutil.which("claude") or "claude"
 
 RUBRIC_SYSTEM = """You are a senior FFmpeg expert grading two AI-generated responses to the same user request.
 
@@ -94,7 +99,7 @@ def _judge_call(prompt_text: str, response_a: str, response_b: str, timeout_s: i
     user_msg = _build_user_message(prompt_text, response_a, response_b)
     result = subprocess.run(
         [
-            "claude", "-p",
+            _CLAUDE, "-p",
             "--disable-slash-commands",
             "--output-format", "json",
             "--model", JUDGE_MODEL,
