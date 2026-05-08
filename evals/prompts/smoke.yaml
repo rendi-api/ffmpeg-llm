@@ -1,0 +1,337 @@
+# 30 smoke-test prompts for the claude-ffmpeg eval harness.
+#
+# Batch 1 (20): synthetic-stack-overflow-style — WebFetch/WebSearch could not
+#   reach stackoverflow.com or reddit.com directly; prompts are hand-authored
+#   to match real SO/r/ffmpeg phrasing and representative question bodies.
+#   IDs are prefixed synthetic-so- or synthetic-reddit-.
+#
+# Batch 2 (10): rendi-internal — paying-customer style questions.
+#   IDs are prefixed rendi-.
+
+# ---------------------------------------------------------------------------
+# BATCH 1 — Stack Overflow / Reddit style (synthetic)
+# ---------------------------------------------------------------------------
+
+- id: synthetic-so-concat-no-reencode
+  source: synthetic-stack-overflow-style
+  prompt: |
+    I have several MP4 files that are all the same resolution and codec and I
+    want to join them into one file without losing quality. I tried just using
+    cat on Linux but that obviously doesn't work. How do I concatenate MP4
+    files with ffmpeg without re-encoding them?
+  category: [encoding]
+  difficulty: easy
+
+- id: synthetic-so-trim-exact-timestamp
+  source: synthetic-stack-overflow-style
+  prompt: |
+    How can I cut a specific segment out of a video using ffmpeg? I want to
+    start at 00:02:15 and end at 00:05:42. I've tried -ss and -t but I'm not
+    sure which order the flags go or whether to put -ss before or after -i.
+    The result sometimes starts a couple seconds off.
+  category: [seeking-and-trimming]
+  difficulty: medium
+  spot_check:
+    fixture: sample_1080p.mp4
+    assertions:
+      - {type: file_exists}
+      - {type: duration, op: approx, value: 15.0, tolerance: 1.0}
+      - {type: no_black_frames_at_start}
+
+- id: synthetic-so-extract-audio-mp3
+  source: synthetic-stack-overflow-style
+  prompt: |
+    Is there a way to extract just the audio track from an mp4 and save it as
+    an mp3? I don't care about the video, I just want the audio. What's the
+    ffmpeg command for this?
+  category: [audio]
+  difficulty: easy
+
+- id: synthetic-so-scale-720p
+  source: synthetic-stack-overflow-style
+  prompt: |
+    I need to resize/scale my video to 720p (1280x720) using ffmpeg. I want
+    to keep the aspect ratio and not stretch it. The source is a 4K file. What
+    filter should I use?
+  category: [filters]
+  difficulty: easy
+
+- id: synthetic-so-overlay-png-watermark
+  source: synthetic-stack-overflow-style
+  prompt: |
+    How do I overlay a PNG logo onto a video with ffmpeg? I want to place it
+    in the bottom right corner with maybe 10px padding from the edges. The PNG
+    has a transparent background. Using filter_complex overlay filter I think?
+  category: [video-effects]
+  difficulty: medium
+
+- id: synthetic-so-speed-up-2x
+  source: synthetic-stack-overflow-style
+  prompt: |
+    I want to double the playback speed of a video with ffmpeg. I found setpts
+    filter for video but what about audio? If I just do setpts=0.5*PTS the
+    audio goes out of sync. How do I speed up both video and audio together?
+  category: [filters]
+  difficulty: medium
+
+- id: synthetic-so-burn-srt-subtitles
+  source: synthetic-stack-overflow-style
+  prompt: |
+    How do I hardcode/burn in subtitles from an .srt file into a video with
+    ffmpeg so that the subtitles are permanently baked into the video frames
+    and can't be turned off? I'm on Ubuntu and have libass installed.
+  category: [text-and-subtitles]
+  difficulty: medium
+  spot_check:
+    fixture: sample_subtitles.srt
+    assertions:
+      - {type: file_exists}
+      - {type: ffprobe_field, stream: 0, key: codec_name, equals: h264}
+
+- id: synthetic-so-convert-mp4-to-gif
+  source: synthetic-stack-overflow-style
+  prompt: |
+    What's the best ffmpeg command to convert a short mp4 clip to a GIF? I've
+    seen references to a palette generation step using palettegen and
+    paletteuse filters. Is that necessary or can I do it in a single pass?
+    Output quality matters more than file size.
+  category: [asset-generation]
+  difficulty: medium
+
+- id: synthetic-so-nvenc-h264-encode
+  source: synthetic-stack-overflow-style
+  prompt: |
+    I have an NVIDIA GPU and I want to use hardware acceleration in ffmpeg
+    instead of software encoding. How do I use NVENC to encode H.264? I see
+    h264_nvenc but not sure what other flags I need like -hwaccel cuda etc.
+  category: [gpu-acceleration]
+  difficulty: medium
+
+- id: synthetic-so-two-pass-encoding
+  source: synthetic-stack-overflow-style
+  prompt: |
+    How do I do two-pass encoding with ffmpeg to hit a specific target
+    bitrate? I want to encode a video at exactly 2 Mbps video bitrate using
+    libx264. I know there's a first pass and second pass but the exact
+    commands are confusing me.
+  category: [encoding]
+  difficulty: medium
+
+- id: synthetic-so-loudnorm-two-pass
+  source: synthetic-stack-overflow-style
+  prompt: |
+    I need to normalize the loudness of several audio files to -16 LUFS for a
+    podcast. I've read about the loudnorm filter in ffmpeg and that you need
+    to do two passes to get accurate results. Can someone show me the full
+    two-pass loudnorm workflow?
+  category: [audio]
+  difficulty: hard
+
+- id: synthetic-so-hls-packaging
+  source: synthetic-stack-overflow-style
+  prompt: |
+    How do I package a video into HLS format (m3u8 + .ts segments) using
+    ffmpeg? I want 6-second segments and a playlist that a player can use for
+    adaptive streaming. Do I need to encode multiple bitrates or can I just do
+    one quality level to start?
+  category: [encoding]
+  difficulty: hard
+
+- id: synthetic-so-crop-center
+  source: synthetic-stack-overflow-style
+  prompt: |
+    How do I crop a video to a centered square (1:1 aspect ratio) using
+    ffmpeg? My source is 1920x1080 and I want to crop it to 1080x1080 centered
+    on the frame. Is there a filter for this?
+  category: [filters]
+  difficulty: easy
+
+- id: synthetic-so-drawtext-timestamp
+  source: synthetic-stack-overflow-style
+  prompt: |
+    I want to burn a timestamp / timecode onto each frame of my video using
+    ffmpeg's drawtext filter so I can use it for reviewing footage. How do I
+    show the current time position (HH:MM:SS) in the top-left corner with a
+    semi-transparent background box?
+  category: [text-and-subtitles]
+  difficulty: hard
+
+- id: synthetic-so-extract-thumbnail
+  source: synthetic-stack-overflow-style
+  prompt: |
+    What's the ffmpeg command to extract a single frame from a video as a JPEG
+    image? I want to grab the frame at exactly the 5-second mark. I've seen
+    people use -ss and -vframes 1 but I'm not clear on the exact syntax.
+  category: [asset-generation]
+  difficulty: easy
+  spot_check:
+    fixture: sample_1080p.mp4
+    assertions:
+      - {type: file_exists}
+
+- id: synthetic-reddit-vertical-crop-9x16
+  source: synthetic-stack-overflow-style
+  prompt: |
+    Anyone know how to crop a landscape 16:9 video to vertical 9:16 with
+    ffmpeg? Like for TikTok / Reels. I want to keep the center of the frame.
+    Source is 1920x1080, target should be 608x1080 or similar to keep 9:16.
+  category: [filters]
+  difficulty: easy
+
+- id: synthetic-reddit-replace-audio-track
+  source: synthetic-stack-overflow-style
+  prompt: |
+    How do I replace the audio track in a video file with a different audio
+    file using ffmpeg without re-encoding the video? I have a video and a
+    separate audio track I want to use instead.
+  category: [audio]
+  difficulty: easy
+
+- id: synthetic-reddit-fade-in-out
+  source: synthetic-stack-overflow-style
+  prompt: |
+    I want to add a 1-second fade in at the start and a 1-second fade out at
+    the end of my video using ffmpeg. Found the fade filter but not sure how
+    to chain fade in and out in one command, especially getting the fade out
+    timing right when I don't know the total duration upfront.
+  category: [video-effects]
+  difficulty: medium
+
+- id: synthetic-so-denoise-hqdn3d
+  source: synthetic-stack-overflow-style
+  prompt: |
+    My video is quite noisy/grainy. Is there an ffmpeg filter I can use to
+    reduce noise? I've seen references to hqdn3d and nlmeans but not sure
+    which is better or what settings to use for a decent balance of quality vs
+    processing speed.
+  category: [filters]
+  difficulty: medium
+
+- id: synthetic-so-multistream-hls-abr
+  source: synthetic-stack-overflow-style
+  prompt: |
+    How do I create a multi-bitrate HLS adaptive streaming output with ffmpeg
+    in a single command? I want three renditions: 1080p at 4Mbps, 720p at
+    2Mbps, and 480p at 1Mbps, all with a master playlist. The output should
+    use H.264 video and AAC audio.
+  category: [encoding, gpu-acceleration]
+  difficulty: hard
+  spot_check:
+    fixture: sample_1080p.mp4
+    assertions:
+      - {type: file_exists}
+      - {type: ffprobe_field, stream: 0, key: codec_name, equals: h264}
+
+# ---------------------------------------------------------------------------
+# BATCH 2 — Rendi-style (paying customer of an FFmpeg-as-a-service API)
+# ---------------------------------------------------------------------------
+
+- id: rendi-bulk-archive-transcode
+  source: rendi-internal
+  prompt: |
+    We have a large library of old .avi and .wmv files from our archive going
+    back to 2005. We need to convert all of them to MP4 so they play on modern
+    devices and are easier to store in S3. Quality should be good but we don't
+    need them to be huge files. What's a sensible encode setting for this?
+  category: [encoding]
+  difficulty: medium
+
+- id: rendi-tiktok-vertical-format
+  source: rendi-internal
+  prompt: |
+    I need to take our horizontal marketing videos (16:9, 1920x1080) and
+    convert them to TikTok format — vertical 9:16, ideally 1080x1920. Can you
+    create a command that pads the sides with a blurred version of the video
+    itself rather than black bars? Make it look good on phones.
+  category: [video-effects, filters]
+  difficulty: hard
+  spot_check:
+    fixture: sample_1080p.mp4
+    assertions:
+      - {type: file_exists}
+      - {type: ffprobe_field, stream: 0, key: codec_name, equals: h264}
+      - {type: ffprobe_field, stream: 0, key: pix_fmt, equals: yuv420p}
+      - {type: no_black_frames_at_start}
+
+- id: rendi-logo-watermark-corner
+  source: rendi-internal
+  prompt: |
+    Every video we produce needs our company logo watermark in the bottom-right
+    corner. The logo is a PNG with transparency. The watermark should be at
+    about 10% of the video width and positioned 20px from each edge. Apply it
+    without re-encoding the whole video if possible, otherwise use fast
+    settings.
+  category: [video-effects]
+  difficulty: medium
+
+- id: rendi-subtitle-burn-custom-font
+  source: rendi-internal
+  prompt: |
+    We have SRT subtitle files and we want to burn them into the video with our
+    brand font (a .ttf file we'll provide). Subtitles should be white text with
+    a dark shadow, centered at the bottom. The video should be re-encoded for
+    web delivery (H.264, good quality, not too large).
+  category: [text-and-subtitles, encoding]
+  difficulty: hard
+
+- id: rendi-podcast-loudness-normalize
+  source: rendi-internal
+  prompt: |
+    Our podcast audio recordings are all at different volumes — some recorded
+    on phone, some in a studio. We need to normalize all of them to the same
+    loudness level that's appropriate for podcast platforms like Spotify and
+    Apple Podcasts. What's the right target and how do we do it with ffmpeg?
+  category: [audio]
+  difficulty: medium
+
+- id: rendi-marketing-gif
+  source: rendi-internal
+  prompt: |
+    We want to create animated GIF previews of our product videos for use on
+    our marketing site and in emails. The GIFs should be roughly 600px wide,
+    last about 5 seconds from the start of the video, loop forever, and look
+    reasonably good — we don't want them to look terrible and pixelated. File
+    size under 5MB if possible.
+  category: [asset-generation]
+  difficulty: medium
+
+- id: rendi-thumbnail-extraction
+  source: rendi-internal
+  prompt: |
+    For each video we process, we need to automatically generate a thumbnail
+    image. We'd like to extract a representative frame from around the 20%
+    mark of the video's duration. Output should be a high quality JPEG at the
+    original video resolution.
+  category: [asset-generation]
+  difficulty: easy
+
+- id: rendi-hls-vod-packaging
+  source: rendi-internal
+  prompt: |
+    We need to prepare our video library for streaming on our web player. The
+    videos should be packaged as HLS with at least two quality levels so
+    viewers on slow connections get a lower bitrate stream and those on fast
+    connections get HD. Include faststart for the MP4 segments if relevant.
+    Use H.264 for compatibility.
+  category: [encoding, cross-category]
+  difficulty: hard
+
+- id: rendi-replace-audio-mix
+  source: rendi-internal
+  prompt: |
+    We have video clips with original audio and we want to layer a background
+    music track underneath at a lower volume — like 20% — while keeping the
+    original audio at full volume. The background music should loop if it's
+    shorter than the video. How do we mix these two audio tracks together?
+  category: [audio]
+  difficulty: medium
+
+- id: rendi-frame-accurate-trim
+  source: rendi-internal
+  prompt: |
+    Our video editor specifies clip in/out points as exact frame numbers (e.g.
+    start frame 1250, end frame 2890) at 30fps. We need to trim the video to
+    those exact frames without any drift. The output should be re-encoded so
+    there's no keyframe alignment issue. What's the right approach with ffmpeg?
+  category: [seeking-and-trimming, encoding]
+  difficulty: medium
