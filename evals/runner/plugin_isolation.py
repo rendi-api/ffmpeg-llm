@@ -52,11 +52,19 @@ def snapshot_enabled_user_plugins(plugins: list[dict] | None = None) -> list[Plu
     ]
 
 
-def disable_all_user_plugins() -> None:
-    subprocess.run(
-        [_CLAUDE, "plugin", "disable", "-a", "-s", "user"],
-        capture_output=True, text=True, check=True, timeout=30,
-    )
+def disable_plugins(snapshot: list[PluginSnapshot]) -> None:
+    """Disable each plugin in the snapshot. `claude plugin disable -a` is
+    incompatible with `--scope`, so we iterate per plugin instead."""
+    for p in snapshot:
+        result = subprocess.run(
+            [_CLAUDE, "plugin", "disable", p.id, "-s", p.scope],
+            capture_output=True, text=True, check=False, timeout=30,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Failed to disable {p.id} (scope={p.scope}): "
+                f"{(result.stderr or result.stdout).strip()}"
+            )
 
 
 def restore_plugins(snapshot: list[PluginSnapshot]) -> list[str]:
@@ -83,7 +91,7 @@ def isolated_user_plugins() -> Iterator[list[PluginSnapshot]]:
     if snapshot:
         print(f"[plugin-isolation] disabling {len(snapshot)} user plugins: "
               f"{', '.join(p.id for p in snapshot)}", flush=True)
-        disable_all_user_plugins()
+        disable_plugins(snapshot)
     try:
         yield snapshot
     finally:

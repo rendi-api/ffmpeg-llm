@@ -39,7 +39,7 @@ def test_isolated_context_restores_on_exception():
 
     with patch("runner.plugin_isolation.snapshot_enabled_user_plugins",
                return_value=snapshot_value), \
-         patch("runner.plugin_isolation.disable_all_user_plugins") as disable, \
+         patch("runner.plugin_isolation.disable_plugins") as disable, \
          patch("runner.plugin_isolation.restore_plugins", return_value=[]) as restore:
 
         with pytest.raises(RuntimeError, match="boom"):
@@ -54,7 +54,7 @@ def test_isolated_context_restores_on_exception():
 def test_isolated_context_skips_disable_when_nothing_enabled():
     """If snapshot is empty, don't bother calling disable/restore."""
     with patch("runner.plugin_isolation.snapshot_enabled_user_plugins", return_value=[]), \
-         patch("runner.plugin_isolation.disable_all_user_plugins") as disable, \
+         patch("runner.plugin_isolation.disable_plugins") as disable, \
          patch("runner.plugin_isolation.restore_plugins") as restore:
 
         with isolated_user_plugins() as snap:
