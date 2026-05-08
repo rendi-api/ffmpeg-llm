@@ -37,14 +37,27 @@ def invoke(
     model: str,
     plugin_dir: Path | None,
     prompt: str,
-    timeout_s: int = 120,
+    timeout_s: int = 300,
 ) -> InvokeResult:
-    """Spawn `claude -p`. Auth via Max OAuth (no API key needed)."""
+    """Spawn `claude -p`. Auth via Max OAuth (no API key needed).
+
+    On timeout or non-zero exit we return an InvokeResult with whatever stdout
+    we got plus an explanatory stderr. The caller (runner.run) keeps going so
+    one slow or failing prompt doesn't kill the whole batch.
+    """
     argv = build_argv(model=model, plugin_dir=plugin_dir, prompt=prompt)
     argv[0] = _CLAUDE  # resolve `claude` -> full path (handles Windows .CMD)
-    result = subprocess.run(
-        argv, capture_output=True, text=True, timeout=timeout_s
-    )
+    try:
+        result = subprocess.run(
+            argv, capture_output=True, text=True, timeout=timeout_s,
+            encoding="utf-8", errors="replace",
+        )
+    except subprocess.TimeoutExpired as e:
+        return InvokeResult(
+            stdout=(e.stdout or "") if isinstance(e.stdout, str) else "",
+            stderr=f"[runner] timed out after {timeout_s}s",
+            returncode=-1,
+        )
     return InvokeResult(
         stdout=result.stdout, stderr=result.stderr, returncode=result.returncode
     )

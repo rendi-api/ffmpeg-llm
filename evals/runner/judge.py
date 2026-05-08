@@ -94,7 +94,7 @@ def _extract_json(text: str) -> dict:
     raise ValueError(f"no JSON found in: {text!r}")
 
 
-def _judge_call(prompt_text: str, response_a: str, response_b: str, timeout_s: int = 120) -> dict:
+def _judge_call(prompt_text: str, response_a: str, response_b: str, timeout_s: int = 300) -> dict:
     """Run `claude -p` with the rubric. Returns the parsed JSON envelope from --output-format json."""
     user_msg = _build_user_message(prompt_text, response_a, response_b)
     result = subprocess.run(
@@ -107,6 +107,7 @@ def _judge_call(prompt_text: str, response_a: str, response_b: str, timeout_s: i
             user_msg,
         ],
         capture_output=True, text=True, timeout=timeout_s,
+        encoding="utf-8", errors="replace",
     )
     if result.returncode != 0:
         raise RuntimeError(f"claude exited {result.returncode}\nstderr: {result.stderr}")
