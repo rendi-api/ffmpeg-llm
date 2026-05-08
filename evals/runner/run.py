@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,6 +16,7 @@ from dotenv import load_dotenv
 
 from runner.claude_invoke import invoke
 from runner.extract import extract_command
+from runner.plugin_isolation import isolated_user_plugins
 from runner.prompts import Prompt, load_prompts
 
 
@@ -40,9 +39,6 @@ def _record(prompt: Prompt, config: str, model: str, plugin_dir: Path | None) ->
 
 def main(argv: list[str] | None = None) -> int:
     load_dotenv()
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("ERROR: ANTHROPIC_API_KEY not set (check evals/.env)", file=sys.stderr)
-        return 1
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--prompts", required=True, type=Path)
@@ -69,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     raw_path = args.out / "raw.jsonl"
 
-    with raw_path.open("w", encoding="utf-8") as f:
+    with isolated_user_plugins(), raw_path.open("w", encoding="utf-8") as f:
         for i, prompt in enumerate(prompts, start=1):
             print(f"[{i}/{len(prompts)}] {prompt.id} ...", flush=True)
             for config, plugin_dir in (

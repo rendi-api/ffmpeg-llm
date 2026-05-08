@@ -32,38 +32,47 @@ exceeding the cap. Estimated cost for the 30-prompt smoke on Sonnet: ~$3–5; fo
 150-prompt full Sonnet pass: ~$15–25; for the curated 50-prompt Opus subset: ~$10–20.
 Adjust `EVAL_BUDGET_USD` in `.env` if needed.
 
-## Authentication
+## Authentication & plugin isolation
 
-The runner spawns `claude --bare -p`. The `--bare` flag is documented as: "skip hooks,
-LSP, plugin sync, attribution, auto-memory, background prefetches, keychain reads, and
-CLAUDE.md auto-discovery. Anthropic auth is strictly `ANTHROPIC_API_KEY` or `apiKeyHelper`
-via `--settings` (OAuth and keychain are never read)." This gives us a clean baseline
-that doesn't leak globally-installed plugins/agents/MCP servers, and forces explicit auth.
+The runner and judge both call `claude -p` and use your **Max-plan OAuth** credentials
+from `~/.claude/.credentials.json`. No `ANTHROPIC_API_KEY` needed.
 
-You must set `ANTHROPIC_API_KEY` in `evals/.env` — subscription OAuth (the default for
-Claude Code Max users) is intentionally bypassed by `--bare`. The judge calls the
-Anthropic API directly via the same key.
+To prevent globally-installed Claude Code plugins (`superpowers`, `claude-hud`, etc.)
+from polluting the "vanilla" baseline, the runner and judge automatically wrap their
+main loop in `runner.plugin_isolation.isolated_user_plugins()`. Behavior:
 
-## Verified headless invocation (recorded 2026-05-08)
+1. Snapshot currently-enabled user-scope plugins.
+2. Run `claude plugin disable -a -s user` (disables them all globally).
+3. Run the benchmark.
+4. Re-enable each plugin in the snapshot via `claude plugin enable <id> -s user`.
 
-Investigated against `claude --version 2.1.132` (Claude Code). The runner uses:
+The disable/restore is wrapped in `try/finally` so plugins come back even on Ctrl-C
+or exception. **Side effect:** while the benchmark runs (~25 min smoke / ~2 hr full),
+any other Claude Code session you have open also sees no user plugins. Project-scope
+plugins (pinned to specific project paths) are untouched.
+
+If a benchmark crashes and leaves plugins disabled, restore manually:
 
 ```bash
-# vanilla baseline (no plugin)
-claude --bare -p --model <model> "<prompt>"
-
-# with the claude-ffmpeg plugin loaded
-claude --bare -p --model <model> --plugin-dir <repo-root> "<prompt>"
+claude plugin enable claude-hud -s user
+claude plugin enable superpowers -s user
+# (or whatever was in your snapshot — check `claude plugin list`)
 ```
 
-Why `--bare` over the originally-planned `HOME=<tempdir>` isolation:
+### Verified headless invocations (recorded 2026-05-08)
 
-- `--bare` is the documented, supported way to disable plugin auto-discovery and CLAUDE.md
-  auto-load. HOME-isolation is a hack that also breaks OAuth.
-- `--bare` still loads plugins via explicit `--plugin-dir`, so the with-plugin path works.
-- Skills still resolve, so the plugin's skill machinery functions normally.
+```bash
+# Runner — vanilla baseline (no plugin loaded)
+claude -p --model <model> "<prompt>"
 
-If you change the invocation in `runner/claude_invoke.py`, re-validate by running a
-single (vanilla, with-plugin) pair against a prompt where you can eyeball the difference
-— e.g., "extract audio without re-encoding" should produce a `-acodec copy` form for
-both, but the with-plugin run typically shows evidence of reading the audio reference.
+# Runner — with the claude-ffmpeg plugin loaded
+claude -p --model <model> --plugin-dir <repo-root> "<prompt>"
+
+# Judge — Opus on the rubric
+claude -p --disable-slash-commands --output-format json \
+       --model claude-opus-4-7 \
+       --system-prompt "<rubric>" "<user message>"
+```
+
+`--disable-slash-commands` on the judge prevents skill resolution mid-session, keeping
+the judge's response clean. Plugin isolation handles the rest.

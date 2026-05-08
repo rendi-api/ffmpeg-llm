@@ -1,26 +1,28 @@
 """Blinded LLM-as-judge over raw.jsonl. Writes judged.jsonl.
 
-Per row: shuffles A/B labels (per-row blinding), sends both responses to a fresh
-Claude Opus session with the rubric, parses scores + verdict + reasoning.
+Per row: shuffles A/B labels (per-row blinding), spawns `claude -p` with the
+rubric as system prompt and asks for JSON output. Auth via Max OAuth.
 
-Uses prompt caching on the system prompt (rubric) — same rubric for every call.
+We use --disable-slash-commands so the judge gets a clean Opus session with no
+plugin skills activating. The runner.plugin_isolation context manager is also
+applied around the loop, so installed plugins (and their hooks) don't fire.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import random
 import re
+import subprocess
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from runner.budget import PRICING, Budget, BudgetExceeded
+from runner.plugin_isolation import isolated_user_plugins
 
 JUDGE_MODEL = "claude-opus-4-7"
 
@@ -53,7 +55,7 @@ Output STRICT JSON only, no prose, matching this schema:
   "reasoning": "1-3 sentences explaining the verdict, naming specific flags or pitfalls."
 }
 
-Use null for axes that don't apply (e.g. `clarification_quality` is null when a command was given).
+Use null for axes that don't apply (e.g. clarification_quality is null when a command was given).
 """
 
 
@@ -87,44 +89,59 @@ def _extract_json(text: str) -> dict:
     raise ValueError(f"no JSON found in: {text!r}")
 
 
+def _judge_call(prompt_text: str, response_a: str, response_b: str, timeout_s: int = 120) -> dict:
+    """Run `claude -p` with the rubric. Returns the parsed JSON envelope from --output-format json."""
+    user_msg = _build_user_message(prompt_text, response_a, response_b)
+    result = subprocess.run(
+        [
+            "claude", "-p",
+            "--disable-slash-commands",
+            "--output-format", "json",
+            "--model", JUDGE_MODEL,
+            "--system-prompt", RUBRIC_SYSTEM,
+            user_msg,
+        ],
+        capture_output=True, text=True, timeout=timeout_s,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"claude exited {result.returncode}\nstderr: {result.stderr}")
+    envelope = json.loads(result.stdout)
+    return envelope
+
+
 def main(argv: list[str] | None = None) -> int:
     load_dotenv()
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("ERROR: ANTHROPIC_API_KEY not set", file=sys.stderr)
-        return 1
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-dir", required=True, type=Path)
     parser.add_argument("--prompts", required=True, type=Path)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--budget-usd", type=float, default=float(os.environ.get("EVAL_BUDGET_USD", 30.0)))
+    parser.add_argument("--budget-usd", type=float, default=30.0,
+                        help="Informational cap; under Max plan this tracks notional API cost.")
     args = parser.parse_args(argv)
 
     raw_path = args.run_dir / "raw.jsonl"
     judged_path = args.run_dir / "judged.jsonl"
 
-    # Group raw rows by prompt_id
     by_prompt: dict[str, dict[str, dict]] = defaultdict(dict)
     with raw_path.open(encoding="utf-8") as f:
         for line in f:
             r = json.loads(line)
             by_prompt[r["prompt_id"]][r["config"]] = r
 
-    # Need prompt text — load it
     from runner.prompts import load_prompts
     prompts_by_id = {p.id: p for p in load_prompts(args.prompts)}
 
     rng = random.Random(args.seed)
-    client = Anthropic()
     budget = Budget(cap_usd=args.budget_usd)
     pricing = PRICING[JUDGE_MODEL]
 
-    with judged_path.open("w", encoding="utf-8") as out:
+    with isolated_user_plugins(), judged_path.open("w", encoding="utf-8") as out:
         for prompt_id, configs in by_prompt.items():
             if "vanilla" not in configs or "with-plugin" not in configs:
                 print(f"   {prompt_id}: missing config; skipping", flush=True)
                 continue
-            # Per-row blinding
+
             swap = rng.random() < 0.5
             response_a_config = "with-plugin" if not swap else "vanilla"
             response_b_config = "vanilla" if not swap else "with-plugin"
@@ -132,57 +149,37 @@ def main(argv: list[str] | None = None) -> int:
             response_b = configs[response_b_config]["raw_response"]
             prompt_text = prompts_by_id[prompt_id].prompt
 
-            # Pre-flight budget check (~2k input + 300 output as conservative estimate)
-            if budget.would_exceed(input_tokens=2000, output_tokens=300, pricing=pricing):
-                print(f"BUDGET CAP REACHED at prompt {prompt_id}; stopping.", file=sys.stderr)
-                break
-
             try:
-                msg = client.messages.create(
-                    model=JUDGE_MODEL,
-                    max_tokens=600,
-                    system=[
-                        {
-                            "type": "text",
-                            "text": RUBRIC_SYSTEM,
-                            "cache_control": {"type": "ephemeral"},
-                        }
-                    ],
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": _build_user_message(prompt_text, response_a, response_b),
-                        }
-                    ],
-                )
+                envelope = _judge_call(prompt_text, response_a, response_b)
             except Exception as e:
                 out.write(json.dumps({"prompt_id": prompt_id, "error": str(e)}) + "\n")
                 continue
 
+            # Track notional cost from the envelope's usage info.
+            usage = envelope.get("usage", {})
+            input_tokens = int(usage.get("input_tokens", 0))
+            output_tokens = int(usage.get("output_tokens", 0))
             try:
                 budget.charge(
                     f"judge:{prompt_id}",
-                    input_tokens=msg.usage.input_tokens,
-                    output_tokens=msg.usage.output_tokens,
+                    input_tokens=input_tokens, output_tokens=output_tokens,
                     pricing=pricing,
                 )
             except BudgetExceeded as e:
                 print(str(e), file=sys.stderr)
                 break
 
-            text = msg.content[0].text  # type: ignore[union-attr]
+            text = envelope.get("result", "")
             try:
                 parsed = _extract_json(text)
             except Exception as e:
                 out.write(
-                    json.dumps(
-                        {"prompt_id": prompt_id, "error": f"unparseable: {e}", "raw": text}
-                    )
+                    json.dumps({"prompt_id": prompt_id, "error": f"unparseable: {e}",
+                                "raw": text})
                     + "\n"
                 )
                 continue
 
-            # Translate verdict from A/B back to with-plugin/vanilla
             verdict_label_map = {"A": response_a_config, "B": response_b_config, "tie": "tie"}
             row = {
                 "prompt_id": prompt_id,
@@ -194,9 +191,9 @@ def main(argv: list[str] | None = None) -> int:
             }
             out.write(json.dumps(row, ensure_ascii=False) + "\n")
             out.flush()
-            print(f"   {prompt_id}: {row['verdict_resolved']} (${budget.spent_usd:.4f})", flush=True)
+            print(f"   {prompt_id}: {row['verdict_resolved']} (notional ${budget.spent_usd:.4f})", flush=True)
 
-    print(f"\nJudged. Total spent: ${budget.spent_usd:.4f}. Wrote {judged_path}")
+    print(f"\nJudged. Notional cost: ${budget.spent_usd:.4f}. Wrote {judged_path}")
     return 0
 
 
