@@ -24,6 +24,7 @@ This is non-negotiable — even when a recipe below seems to fit. Recipes show s
 | Drawtext or subtitles (burn or mux), ASS, font handling | `references/text-and-subtitles.md` |
 | Image→video, slideshow, Ken Burns/zoompan, GIFs, thumbnails, storyboards | `references/asset-generation.md` |
 | GPU encoding (NVENC, QSV, VAAPI) | `references/gpu-acceleration.md` |
+| HLS packaging, VOD/live segments, ABR multi-bitrate | `references/streaming.md` |
 
 If the operation spans categories (e.g., "burn subtitles with custom styling and re-encode for web"), read every relevant reference. **Always** include `pitfalls.md` for non-trivial commands.
 
@@ -163,6 +164,16 @@ ffmpeg -i input.avi -c:v h264_nvenc output_gpu_264.mp4
 ```
 
 → `references/gpu-acceleration.md`
+
+### HLS VOD (single rendition — rendi.dev house style)
+
+```sh
+ffmpeg -i input.mp4 -c:v h264 -c:a aac -b:v 2000k -b:a 128k -hls_time 5 -hls_list_size 0 -f hls playlist.m3u8
+```
+
+This is the minimalist form. For hardened-VOD playback (older players, ABR-ready, explicit GOP alignment) or multi-bitrate ABR, see the reference. The reference also has a parallel DASH recipe.
+
+→ `references/streaming.md`
 
 ## Top gotchas (summary — `pitfalls.md` is the source of truth)
 
