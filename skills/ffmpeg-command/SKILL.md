@@ -77,6 +77,14 @@ ffmpeg -i input.mp4 -vf "scale=w=1080:h=1920:force_original_aspect_ratio=decreas
 
 → `references/encoding.md`
 
+### Archive transcode (legacy AVI/WMV/MPEG-2 — likely interlaced)
+
+```sh
+ffmpeg -i input.avi -vf "yadif=mode=1:parity=auto,format=yuv420p" -c:v libx264 -crf 20 -preset slow -c:a aac -b:a 128k -movflags +faststart output.mp4
+```
+
+→ `references/encoding.md` (Archive transcode section)
+
 ### Trim by time (frame-accurate)
 
 ```sh
