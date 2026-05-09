@@ -199,3 +199,64 @@ For *multiple* thumbnails from one input, use `-filter_complex` with `split` and
 **Rule:** Add `-y` at the start of every command in scripts/automation.
 
 **Why:** Without it, FFmpeg prompts for confirmation when the output file exists. That hangs non-interactive runs.
+
+## 21. HLS VOD requires `-hls_playlist_type vod` and aligned keyframes
+
+**Rule:** When packaging a finished file as HLS VOD, set `-hls_playlist_type vod` AND force keyframes to the segment boundary with `-g <fps × hls_time> -keyint_min <same> -sc_threshold 0`.
+
+**Why (`playlist_type vod`):** Without it, the playlist omits `#EXT-X-ENDLIST`, players treat it as live, refuse to seek beyond the current segment, and don't display total duration. This is the single most common HLS-packaging mistake.
+
+**Why (keyframe alignment):** `-hls_time N` is a *target*. The muxer can only cut at keyframes. Without forcing GOPs to align, segments end up uneven (e.g., 3 s + 9 s + 4 s instead of 6 + 6 + 4) and ABR players that switch renditions land mid-GOP, producing visible glitches.
+
+**How to apply:**
+
+```sh
+ffmpeg -i input.mp4 \
+  -c:v libx264 -pix_fmt yuv420p \
+  -g 60 -keyint_min 60 -sc_threshold 0 \
+  -hls_time 6 -hls_playlist_type vod -hls_list_size 0 \
+  -hls_flags independent_segments \
+  -hls_segment_filename "seg_%03d.ts" \
+  output.m3u8
+```
+
+For variable frame rates or non-libx264 encoders, use `-force_key_frames "expr:gte(t,n_forced*6)"` instead of the `-g`/`-keyint_min`/`-sc_threshold` combo. See `streaming.md`.
+
+## 22. GIF without `palettegen` looks banded
+
+**Rule:** Always use the `palettegen` → `paletteuse` two-pass pipeline when converting video to GIF (single-command via `split` is preferred; no intermediate file needed).
+
+**Why:** GIF is limited to 256 colors. The default global palette is generic — assigned to arbitrary footage it produces severe banding on gradients, color shift on skin tones, and dithering crosshatch. A custom palette generated from the actual footage uses the available 256 slots for colors that matter to *this* clip.
+
+**How to apply:**
+
+```sh
+ffmpeg -i input.mp4 -vf "fps=20,scale=640:-1:flags=lanczos,split[s0][s1];[s0]palettegen=stats_mode=full[p];[s1][p]paletteuse=dither=sierra2_4a" -loop 0 -an output.gif
+```
+
+For size-first vs quality-first parameter choices, see `asset-generation.md` → GIF.
+
+## 23. Old archive footage is often interlaced — apply `yadif`
+
+**Rule:** When transcoding pre-2010 AVI/WMV/MPEG-2 (VHS digitizations, capture-card files, broadcast rips), apply `yadif` deinterlacing unless you've verified the source is progressive.
+
+**Why:** Interlaced content stored as progressive metadata is common. Re-encoding without deinterlacing produces visible combing on motion that looks like a broken encoder. The H.264 spec allows interlaced encoding (`-flags +ilme+ildct`) but most playback paths assume progressive — combing artifacts persist.
+
+**How to apply:**
+
+```sh
+ffmpeg -i input.avi -vf "yadif=mode=1:parity=auto,format=yuv420p" -c:v libx264 -crf 20 -preset slow -c:a aac -b:a 128k output.mp4
+```
+
+- `mode=1` — output one frame per field (60i → 60p, preserves motion).
+- `mode=0` — output one frame per *pair* of fields (60i → 30p, half output rate, smaller file).
+- `parity=auto` — auto-detect field order; specify `tff` (MPEG-2/DV NTSC) or `bff` (DV PAL) if detection is wrong.
+- `deint=interlaced` (optional) — only deinterlace frames marked as interlaced; safer for mixed content but skips unflagged-but-interlaced frames.
+
+Check field order before deciding:
+
+```sh
+ffprobe -v error -select_streams v:0 -show_entries stream=field_order -of default=noprint_wrappers=1 input.avi
+```
+
+`tt`/`bb` ⇒ interlaced; `progressive` ⇒ skip yadif; `unknown` ⇒ apply yadif anyway when in doubt.
