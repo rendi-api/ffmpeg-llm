@@ -51,7 +51,41 @@ The output is 7 seconds long (4 + 4 - 1 fade overlap).
 
 ## GIF
 
-Looping GIF, every 2nd frame, 10× sped up, scaled to 320 px wide:
+GIF is on a quality-vs-size axis (see SKILL.md → Axis declaration). The 256-color palette ceiling makes palette generation disproportionately impactful — single-pass GIFs without a custom palette always look banded. Pick one of the two branches based on user wording.
+
+### How to choose
+
+| User signal | Branch |
+|---|---|
+| "quality matters more than size", "looks crisp", "for marketing/portfolio", "smooth gradients" | quality-first |
+| "size budget under N MB", "Slack/Discord upload", "fast turnaround", "thumbnail" | size-first |
+| (no signal) | size-first (cheaper, fast enough for most users) |
+
+### Quality-first (preserve gradients and detail)
+
+```sh
+ffmpeg -i input.mp4 -vf "fps=20,scale=640:-1:flags=lanczos,split[s0][s1];[s0]palettegen=stats_mode=full[p];[s1][p]paletteuse=dither=sierra2_4a" -loop 0 -an output.gif
+```
+
+- `fps=20` — smooth motion. Drop to `15` if you need to save size with minimal visible loss.
+- `scale=640:-1:flags=lanczos` — Lanczos is the sharpest downscaler.
+- `palettegen=stats_mode=full` — analyzes **every frame** for the optimal global palette (vs `diff`, which is biased toward inter-frame motion).
+- `paletteuse=dither=sierra2_4a` — Sierra 2-4A produces film-like noise on gradients and skin tones; avoids the visible crosshatch pattern of bayer dithering.
+
+### Size-first (smallest acceptable file)
+
+```sh
+ffmpeg -i input.mp4 -vf "fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen=stats_mode=diff[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" -loop 0 -an output.gif
+```
+
+- `fps=15`, `scale=480:-1` — cuts roughly half the bytes vs the quality-first defaults at the cost of detail.
+- `palettegen=stats_mode=diff` — palette favors moving regions; static backgrounds compress better.
+- `dither=bayer:bayer_scale=5` — ordered dithering compresses more efficiently than error-diffusion.
+- `diff_mode=rectangle` — only re-dithers the changed bounding box per frame, shrinking the file further.
+
+### Stylistic GIF (looping, every 2nd frame, 10× speed, 320 px)
+
+The original cheatsheet recipe — useful when the goal is a stylized fast-cut effect rather than a faithful clip:
 
 ```sh
 ffmpeg -i input.mp4 -vf "select='gt(trunc(t/2),trunc(prev_t/2))',setpts='PTS*0.1',scale=trunc(oh*a/2)*2:320:force_original_aspect_ratio=decrease,pad=trunc(oh*a/2)*2:320:-1:-1" -loop 0 -an output.gif
@@ -62,6 +96,8 @@ ffmpeg -i input.mp4 -vf "select='gt(trunc(t/2),trunc(prev_t/2))',setpts='PTS*0.1
 - `scale=trunc(oh*a/2)*2:320:...` — scales to 320 px tall with width auto, ensuring even dimensions.
 - `-loop 0` — infinite loop (default; `-loop 1` plays once).
 - `-an` — no audio (GIFs don't carry audio).
+
+This branch does not use a custom palette; it relies on the stylized effect masking banding. Pair it with `palettegen`+`paletteuse` if banding is visible on the source.
 
 ## Video compilation from one source
 

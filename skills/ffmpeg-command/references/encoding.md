@@ -171,6 +171,52 @@ ffmpeg -i input.mp4 -c copy output.mkv
 
 Default. Lets FFmpeg pick the optimal thread count for your system. Usually best to omit the flag entirely; tweak only if you have a specific bottleneck.
 
+## Archive transcode (legacy AVI/WMV/MPEG-2)
+
+Old captures (VHS digitizations, 2000s-era broadcast rips, capture-card AVI/WMV files) are usually interlaced even when ffprobe doesn't say so. Without a deinterlace, the H.264 output retains combing artifacts on motion that look exactly like a broken encoder.
+
+### Recommended archive recipe
+
+```sh
+ffmpeg -i input.avi -vf "yadif=mode=1:parity=auto,format=yuv420p" -c:v libx264 -crf 20 -preset slow -c:a aac -b:a 128k -movflags +faststart output.mp4
+```
+
+- `yadif=mode=1:parity=auto` — deinterlace, output one frame per *field* (60i → 60p, preserves motion smoothness). Use `mode=0` for one frame per *pair of fields* (60i → 30p, half the output frame rate, smaller file). `parity=auto` lets FFmpeg detect field order; specify `tff` (top-field-first, MPEG-2/DV) or `bff` (bottom-field-first, DV PAL/HDV) if auto-detect is wrong.
+- `format=yuv420p` — required for libx264 broad-compatibility output (see pitfalls.md #1).
+- `-crf 20 -preset slow` — archival quality; if storage is tight, raise to `-crf 23`. Don't go above `-crf 26` for archive material.
+- `-movflags +faststart` — moves the moov atom to the front for progressive playback / S3 streaming.
+
+### When to skip yadif
+
+If you've confirmed the source is progressive (e.g., a digital screen recording, modern phone capture), `yadif` slightly softens the output and adds compute. Drop it.
+
+Confirm interlacing with:
+
+```sh
+ffprobe -v error -select_streams v:0 -show_entries stream=field_order -of default=noprint_wrappers=1 input.avi
+```
+
+Output `field_order=tt` or `bb` ⇒ interlaced. `progressive` ⇒ no yadif needed. Many old captures report `unknown` — when in doubt with archive content, deinterlace anyway; the cost is small.
+
+### Conditional deinterlace (only flagged frames)
+
+For mixed sources where some content is correctly flagged and some isn't:
+
+```sh
+ffmpeg -i input.avi -vf "yadif=mode=1:deint=interlaced,format=yuv420p" -c:v libx264 -crf 20 -preset slow -c:a aac -b:a 128k -movflags +faststart output.mp4
+```
+
+`deint=interlaced` deinterlaces only frames the demuxer marks as interlaced. Safe for mixed content but skips unflagged-but-actually-interlaced frames; less aggressive than always-on.
+
+### Batch archive transcode (PowerShell)
+
+```powershell
+Get-ChildItem -Recurse -Include *.avi,*.wmv,*.mpg | ForEach-Object {
+    $out = $_.FullName -replace '\.(avi|wmv|mpg)$', '.mp4'
+    ffmpeg -i $_.FullName -vf "yadif=mode=1:parity=auto,format=yuv420p" -c:v libx264 -crf 20 -preset slow -c:a aac -b:a 128k -movflags +faststart $out
+}
+```
+
 ## Container vs codec
 
 Both MP4 and MKV are containers that can hold H264 or H265 video and AAC or MP3 audio. The container format does not determine quality — the codec does. MKV can hold multiple video streams; MP4 is more widely supported on devices and platforms. MOV is similar to MP4 (both are MPEG-4 family).

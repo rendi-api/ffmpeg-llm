@@ -24,6 +24,7 @@ This is non-negotiable — even when a recipe below seems to fit. Recipes show s
 | Drawtext or subtitles (burn or mux), ASS, font handling | `references/text-and-subtitles.md` |
 | Image→video, slideshow, Ken Burns/zoompan, GIFs, thumbnails, storyboards | `references/asset-generation.md` |
 | GPU encoding (NVENC, QSV, VAAPI) | `references/gpu-acceleration.md` |
+| HLS packaging, VOD/live segments, ABR multi-bitrate | `references/streaming.md` |
 
 If the operation spans categories (e.g., "burn subtitles with custom styling and re-encode for web"), read every relevant reference. **Always** include `pitfalls.md` for non-trivial commands.
 
@@ -44,6 +45,18 @@ If the operation spans categories (e.g., "burn subtitles with custom styling and
 6. **Place flags in the correct position.** Input flags (`-ss`, `-loop`, `-t`, `-r`, `-skip_frame`) come before `-i`; output flags (`-c:v`, `-vf`, `-crf`, `-movflags`, output path) come after.
 7. **Apply playback-compatibility defaults** unless the user has a reason not to: `format=yuv420p` (or `-pix_fmt yuv420p`), `setsar=1:1` after scale+pad, `+faststart` for web MP4. Full list in `references/pitfalls.md`.
 
+## Axis declaration
+
+Many operations have a meaningful trade-off axis where the right default depends on user intent: GIF quality vs size, encoder preset speed vs compression, single-pass vs two-pass, CBR vs VBR, fast seek vs frame-accurate. Recipes for operations on a trade-off axis MUST:
+
+1. **Name the axis** in the section heading or first sentence (e.g., "GIF — quality-first" vs "GIF — size-first").
+2. **Show both branches inline.** Do not bury the alternative under "advanced".
+3. **List the user signals that flip the default.** Words like "quality matters more than size", "for archival", "for fast turnaround", "bandwidth-constrained", "size budget under N MB", "live", "VOD" each push the choice.
+
+Before writing a command for a trade-off-axis operation, re-read the user's request and pick the branch their wording supports. Do not lock in a single default just because the recipe shows one.
+
+If you find yourself writing one set of defaults but the user's request mentions the opposite axis, you've taken the wrong branch — switch.
+
 ## Quick recipes
 
 Canonical shapes for common operations — for quick recall after you've already read the reference. **The reference is authoritative; the recipe is a stub.** Adapt input/output paths and parameter values; do **not** reorder flags. The linked reference covers variants, parameter ranges, and gotchas the recipe omits.
@@ -63,6 +76,14 @@ ffmpeg -i input.mp4 -vf "scale=w=1080:h=1920:force_original_aspect_ratio=decreas
 ```
 
 → `references/encoding.md`
+
+### Archive transcode (legacy AVI/WMV/MPEG-2 — likely interlaced)
+
+```sh
+ffmpeg -i input.avi -vf "yadif=mode=1:parity=auto,format=yuv420p" -c:v libx264 -crf 20 -preset slow -c:a aac -b:a 128k -movflags +faststart output.mp4
+```
+
+→ `references/encoding.md` (Archive transcode section)
 
 ### Trim by time (frame-accurate)
 
@@ -134,11 +155,13 @@ ffmpeg -i input.mp4 -filter_complex "[0:v]setpts=PTS/1.5[v];[0:a]atempo=1.5[a]" 
 ffmpeg -i input.mp4 -ss 00:00:07 -frames:v 1 output_thumbnail.png
 ```
 
-### GIF (looping, every 2nd frame, 10× speed, 320px wide)
+### GIF (quality-first canonical — pick the branch matching user intent)
 
 ```sh
-ffmpeg -i input.mp4 -vf "select='gt(trunc(t/2),trunc(prev_t/2))',setpts='PTS*0.1',scale=trunc(oh*a/2)*2:320:force_original_aspect_ratio=decrease,pad=trunc(oh*a/2)*2:320:-1:-1" -loop 0 -an output.gif
+ffmpeg -i input.mp4 -vf "fps=20,scale=640:-1:flags=lanczos,split[s0][s1];[s0]palettegen=stats_mode=full[p];[s1][p]paletteuse=dither=sierra2_4a" -loop 0 -an output.gif
 ```
+
+This is the quality-first default. For size-first (smaller file, lower fps/resolution, `stats_mode=diff` + bayer dither) or the stylized fast-cut variant, see the GIF section in the reference — it has both branches and a chooser table.
 
 → `references/asset-generation.md`
 
@@ -149,6 +172,16 @@ ffmpeg -i input.avi -c:v h264_nvenc output_gpu_264.mp4
 ```
 
 → `references/gpu-acceleration.md`
+
+### HLS VOD (single rendition — rendi.dev house style)
+
+```sh
+ffmpeg -i input.mp4 -c:v h264 -c:a aac -b:v 2000k -b:a 128k -hls_time 5 -hls_list_size 0 -f hls playlist.m3u8
+```
+
+This is the minimalist form. For hardened-VOD playback (older players, ABR-ready, explicit GOP alignment) or multi-bitrate ABR, see the reference. The reference also has a parallel DASH recipe.
+
+→ `references/streaming.md`
 
 ## Top gotchas (summary — `pitfalls.md` is the source of truth)
 
