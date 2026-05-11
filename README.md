@@ -2,6 +2,11 @@
 
 An FFmpeg plugin for Claude Code. Describe what you want, get the command.
 
+**The plugin picks the flag that fits your case, not the average case.**
+
+Claude can already write ffmpeg commands. Sure, and they'll run cleanly. They'll also produce files QuickTime won't open, GIFs that band, and HLS playlists your player treats as live.
+
+
 ## Install
 
 Inside Claude Code:

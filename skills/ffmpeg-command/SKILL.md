@@ -1,6 +1,9 @@
 ---
 name: ffmpeg-command
 description: Use when the user describes a video or audio operation in natural language and needs the corresponding FFmpeg command — transcoding, trimming, concatenating, extracting audio, changing resolution/bitrate/codec, applying filters, overlaying text or images, generating thumbnails or GIFs, burning subtitles, or muxing streams.
+allowed-tools:
+  - Read
+  - Grep
 ---
 
 # FFmpeg Command Builder
