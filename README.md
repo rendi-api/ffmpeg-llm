@@ -1,20 +1,26 @@
-# claude-ffmpeg
+# ffmpeg-llm
 
 An FFmpeg plugin for Claude Code. Describe what you want, get the command.
 
-## Install (local dev)
+## Install
 
-```bash
-claude --plugin-dir ./claude-ffmpeg
+Inside Claude Code:
+
 ```
+/plugin marketplace add rendi-api/ffmpeg-llm
+/plugin install ffmpeg-llm@rendi-official
+```
+
+The first command registers this repo as a plugin marketplace; the second installs the plugin from it.
 
 ## Quick start
 
 With the plugin loaded, describe what you want in plain English:
 
-> *"trim input.mp4 from 10s to 25s, re-encode for web"*
 > *"burn the subtitles from sample.srt using Poppins 24pt"*
+
 > *"high-quality GIF from clip.mp4, max 640px wide"*
+
 > *"package input.mp4 as HLS VOD for a CDN"*
 
 Or use the slash command:
@@ -25,11 +31,11 @@ Or use the slash command:
 
 For uglier jobs (a filtergraph that won't compile, an encode that breaks on a real phone), Claude hands off to the `ffmpeg-expert` subagent.
 
-## What it handles
+## You describe the goal. Claude picks the flags.
 
-Transcoding, remuxing, trimming, filter graphs, audio, subtitles, GIFs, HLS/DASH, GPU encoding (NVENC/QSV/VAAPI).
+No more researching **fast vs frame-accurate seek** or **quality-first vs size-first GIF**. Tell Claude what you actually care about ("smallest file", "plays on iPhone", "frame-accurate cut at 0:14") and the right approach falls out.
 
-You don't have to pick between fast vs frame-accurate seek, or quality-first vs size-first GIF. Tell Claude what you actually care about ("smallest file", "plays on iPhone", "frame-accurate cut at 0:14") and it picks the approach and the flags for you.
+Covers transcoding, remuxing, trimming, filter graphs, audio, subtitles, GIFs, HLS/DASH, GPU encoding (NVENC/QSV/VAAPI).
 
 ## Remembers the flags that quietly ruin your day
 

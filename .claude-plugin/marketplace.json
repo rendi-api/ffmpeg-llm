@@ -1,0 +1,13 @@
+{
+  "name": "rendi-official",
+  "owner": {
+    "name": "Yuval Yakubov",
+    "email": "yuval@rendi.dev"
+  },
+  "plugins": [
+    {
+      "name": "ffmpeg-llm",
+      "source": "./"
+    }
+  ]
+}
