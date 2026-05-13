@@ -2,9 +2,11 @@
 
 An FFmpeg plugin for Claude Code. Describe what you want, get the command.
 
-**The plugin picks the flag that fits your case, not the average case.**
+A specialized ffmpeg plugin for when a general-purpose LLM isn't accurate enough. Use it to make Claude Code more reliable with ffmpeg:
 
-Claude can already write ffmpeg commands. Sure, and they'll run cleanly. They'll also produce files QuickTime won't open, GIFs that band, and HLS playlists your player treats as live.
+- files QuickTime can open
+- frame-accurate cuts at the timestamp you asked for
+- HLS and DASH streams ready for the web
 
 
 ## Install
@@ -42,9 +44,16 @@ No more researching **fast vs frame-accurate seek** or **quality-first vs size-f
 
 Covers transcoding, remuxing, trimming, filter graphs, audio, subtitles, GIFs, HLS/DASH, GPU encoding (NVENC/QSV/VAAPI).
 
-## Remembers the flags that quietly ruin your day
+## Handles the common gotchas
 
-`yuv420p` so QuickTime will play the file. `+faststart` for web MP4. `hvc1` for Apple HEVC. `setsar=1:1` after scale+pad. `palettegen` so the GIF isn't banded. `EXT-X-ENDLIST` so the HLS player doesn't think your finished file is a live stream. About twenty of these baked in. Mostly things you only learn by shipping a broken video first.
+Two-dozen FFmpeg pitfalls are baked into the skills. A few:
+
+- `setpts=PTS-STARTPTS` after `trim` for clean `concat` timing
+- `FontName=` in subtitle filters uses the font's internal PostScript name
+- `amix` uses both `duration=shortest` and the output flag `-shortest` for matched track lengths
+- `fps`/`setsar=1`/`format=yuv420p` to normalize stream parameters before `concat`
+- `-fps_mode passthrough` as the current frame-rate pass-through syntax
+- `yadif` for clean deinterlacing of old AVI/WMV captures, including ones the metadata labels progressive
 
 ## License
 
