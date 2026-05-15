@@ -2,10 +2,10 @@
 
 An FFmpeg plugin for Claude Code. Describe what you want, get the command.
 
-A specialized ffmpeg plugin for when a general-purpose LLM isn't accurate enough. Use it to make Claude Code more reliable with ffmpeg:
+A specialized ffmpeg plugin for when a general-purpose LLM isn't accurate enough. Use it to make Claude Code more reliable with ffmpeg. A few things it handles well:
 
-- files QuickTime can open
-- frame-accurate cuts at the timestamp you asked for
+- Files QuickTime can open
+- Frame-accurate cuts at the timestamp you asked for
 - HLS and DASH streams ready for the web
 
 
@@ -36,7 +36,7 @@ Or use the slash command:
 /ffmpeg scale to 1080x1920 with black bars, web-optimized
 ```
 
-For uglier jobs (a filtergraph that won't compile, an encode that breaks on a real phone), Claude hands off to the `ffmpeg-expert` subagent.
+For more complicated jobs (a filtergraph that won't compile, an encode that breaks on a real phone), Claude hands off to the `ffmpeg-expert` subagent.
 
 ## You describe the goal. Claude picks the flags.
 
