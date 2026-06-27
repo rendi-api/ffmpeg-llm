@@ -4,6 +4,10 @@
     "name": "Yuval Yakubov",
     "email": "yuval@rendi.dev"
   },
+  "metadata": {
+    "description": "An FFmpeg plugin for Claude Code. Describe what you want, get the command.",
+    "version": "0.1.0"
+  },
   "plugins": [
     {
       "name": "ffmpeg-llm",
